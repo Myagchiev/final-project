@@ -38,15 +38,16 @@ func checkAndFixDate(task *db.Task) error {
 		return nil
 	}
 
-	if task.Repeat != "" {
-		next, err := utils.NextDate(now, task.Date, task.Repeat)
-		if err != nil {
-			return err
-		}
-		task.Date = next
-	} else {
+	if task.Repeat == "" {
 		task.Date = today
+		return nil
 	}
+
+	next, err := utils.NextDate(now, task.Date, task.Repeat)
+	if err != nil {
+		return err
+	}
+	task.Date = next
 	return nil
 }
 
@@ -62,18 +63,30 @@ func tasksListHandler(w http.ResponseWriter, r *http.Request) {
 
 	if search == "" {
 		tasks, err = db.Tasks(maxTasks)
-	} else if t, parseErr := time.Parse("02.01.2006", search); parseErr == nil {
-		searchDate := t.Format(utils.DateLayout)
-		tasks, err = db.TasksWithFilter(maxTasks, "", searchDate)
-	} else {
-		tasks, err = db.TasksWithFilter(maxTasks, search, "")
+		if err != nil {
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, TasksResp{Tasks: tasks})
+		return
 	}
 
+	if t, parseErr := time.Parse("02.01.2006", search); parseErr == nil {
+		searchDate := t.Format(utils.DateLayout)
+		tasks, err = db.TasksWithFilter(maxTasks, "", searchDate)
+		if err != nil {
+			writeJSONError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, TasksResp{Tasks: tasks})
+		return
+	}
+
+	tasks, err = db.TasksWithFilter(maxTasks, search, "")
 	if err != nil {
 		writeJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	writeJSON(w, TasksResp{Tasks: tasks})
 }
 
